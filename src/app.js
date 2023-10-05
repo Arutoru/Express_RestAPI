@@ -1,7 +1,7 @@
 const express = require('express');
 const app = express();
 app.use(express.json());
-
+const bodyParser = require('body-parser'); 
 
 const jwt = require('jsonwebtoken');
 const config = require('./config');
@@ -30,22 +30,27 @@ let books = [
 ];
 
 const db = mongoose.connection;
+db.on('error', (error) => {
 
-db.on('open', () => {
-  console.log('Connected to database');
-
-  books.forEach((book) => {
-    try {
-      Book.create(book);
-      console.log(`Book ${book} created`);
-    } catch (error) {
-      console.error(error);
-    }
-  });
+  console.error(error);
 });
 
+books.forEach((book) => {
+  try {
+
+    Book.create(book);
+    console.log(`Book ${book.title} created`);
+  } catch (error) {
+    console.error(error);
+  }
+});
+
+// Use body-parser middleware to parse incoming requests
+ app.use(bodyParser.urlencoded({ extended: true }));
+ app.use(bodyParser.json());
+
 // Get all books
-app.get('/books', verifyToken, (req, res) => {
+app.get('/books', verifyToken, async (req, res) => {
   try {
     const books = await Book.find();
     res.status(200).json(books);
@@ -56,7 +61,7 @@ app.get('/books', verifyToken, (req, res) => {
 });
 
 // Get a book by id
-app.get('/books/:id', verifyToken, getBook, (req, res) => {
+app.get('/books/:id', verifyToken, async (req, res) => {
   try {
     const book = await Book.findById(req.params.id);
     if (!book) {
@@ -70,10 +75,10 @@ app.get('/books/:id', verifyToken, getBook, (req, res) => {
 });
 
 // Create a new book
-app.post('/books', verifyToken, getBook, (req, res) => {
+app.post('/books', verifyToken, async (req, res) => {
   try {
-    const book = new Book(req.body);
-    await book.save();
+    const book = await Book(req.body);
+    book.save();
     res.status(201).json(book);
   } catch (error) {
     console.error(error);
@@ -82,9 +87,9 @@ app.post('/books', verifyToken, getBook, (req, res) => {
 });
 
 // Update an existing book by ID
-app.put('/books/:id', verifyToken, (req, res) => {
+app.put('/books/:id', verifyToken, async (req, res) => {
   const {id, title, author,publishedDate} = req.body;
-  const book = Book.findByIdAndUpdate(req.params.id, {
+  const book = await Book.findByIdAndUpdate(req.params.id, {
     id,
     title,
     author,
@@ -114,23 +119,6 @@ app.post('/login', (req, res) => {
   const token = jwt.sign({ id: user._id }, config.secret, { expiresIn: config.expiresIn });
   res.send({ token });
 });
-
-
-async function getBook(req, res, next) {
-  let book
-  try {
-    book = await Book.findById(req.params.id)
-    if (book == null) {
-      return res.status(404).json({message: 'cannot find dubscriber'})
-    }
-  }
-  catch (err){
-    return res.status(500).json({message: err.message})
-  }
-
-  res.book = book;
-  next();
-}
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`Listening on port ${port}...`));
