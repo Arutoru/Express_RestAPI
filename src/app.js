@@ -8,7 +8,7 @@ const config = require('./config');
 
 const Book = require('./models/Book')
 const mongoose = require('mongoose');
-mongoose.connect('mongodb://localhost:27017/App', { useNewUrlParser: true, connectTimeoutMS: 3000000 // Increase timeout limit to 30 seconds
+mongoose.connect('mongodb://localhost:27017/App', { useNewUrlParser: true, connectTimeoutMS: 3000000 // Increase timeout limit to 300 seconds
 });
 
 function verifyToken(req, res, next) {
