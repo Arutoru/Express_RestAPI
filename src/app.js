@@ -2,8 +2,14 @@ const express = require('express');
 const app = express();
 app.use(express.json());
 
+
 const jwt = require('jsonwebtoken');
 const config = require('./config');
+
+const Book = require('./models/Book')
+const mongoose = require('mongoose');
+mongoose.connect('mongodb://localhost:27017/App', { useNewUrlParser: true, connectTimeoutMS: 3000000 // Increase timeout limit to 30 seconds
+});
 
 function verifyToken(req, res, next) {
   try {
@@ -18,53 +24,88 @@ function verifyToken(req, res, next) {
 }
 
 let books = [
-  { id: 1, title: 'The Alchemist', author: 'Paulo Coelho', publishedDate: '1988-01-01'},
-  { id: 2, title: 'The Catcher in the Rye', author: 'J.D. Salinger', publishedDate: '1951-07-16'},
-  { id: 3, title: 'To Kill a Mockingbird', author: 'Harper Lee', publishedDate: '1960-07-11'}
+  { title: 'The Alchemist', author: 'Paulo Coelho', publishedDate: '1988-01-01'},
+  { title: 'The Catcher in the Rye', author: 'J.D. Salinger', publishedDate: '1951-07-16'},
+  { title: 'To Kill a Mockingbird', author: 'Harper Lee', publishedDate: '1960-07-11'}
 ];
 
+const db = mongoose.connection;
+
+db.on('open', () => {
+  console.log('Connected to database');
+
+  books.forEach((book) => {
+    try {
+      Book.create(book);
+      console.log(`Book ${book} created`);
+    } catch (error) {
+      console.error(error);
+    }
+  });
+});
 
 // Get all books
 app.get('/books', verifyToken, (req, res) => {
-  res.send(books);
+  try {
+    const books = await Book.find();
+    res.status(200).json(books);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
 });
 
 // Get a book by id
-app.get('/books/:id', verifyToken, (req, res) => {
-  const book = books.find(b => b.id === parseInt(req.params.id));
-  if (!book) return res.status(404).send('Book not found.');
-  res.send(book);
+app.get('/books/:id', verifyToken, getBook, (req, res) => {
+  try {
+    const book = await Book.findById(req.params.id);
+    if (!book) {
+      return res.status(404).json({ message: 'Book not found' });
+    }
+    res.status(200).json(book);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
 });
 
 // Create a new book
-app.post('/books', verifyToken, (req, res) => {
-  const book = {
-    id: books.length + 1,
-    title: req.body.title,
-    author: req.body.author,
-    publishedDate: req.body.publishedDate
-  };
-  books.push(book);
-  res.send(book);
+app.post('/books', verifyToken, getBook, (req, res) => {
+  try {
+    const book = new Book(req.body);
+    await book.save();
+    res.status(201).json(book);
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ message: 'Invalid request' });
+  }
 });
 
-// Update an existing book
+// Update an existing book by ID
 app.put('/books/:id', verifyToken, (req, res) => {
-  const book = books.find(b => b.id === parseInt(req.params.id));
-  if (!book) return res.status(404).send('Book not found.');
-  book.title = req.body.title;
-  book.author = req.body.author;
-  book.publishedDate = req.body.publishedDate;
+  const {id, title, author,publishedDate} = req.body;
+  const book = Book.findByIdAndUpdate(req.params.id, {
+    id,
+    title,
+    author,
+    publishedDate,
+  }, { new: true });
+  if (!book) return res.status(404).send('Book not found');
   res.send(book);
 });
 
-// Delete a book
-app.delete('/books/:id', verifyToken, (req, res) => {
-  const book = books.find(b => b.id === parseInt(req.params.id));
-  if (!book) return res.status(404).send('Book not found.');
-  const index = books.indexOf(book);
-  books.splice(index, 1);
-  res.send(book);
+// Delete an existing book by ID
+app.delete('/api/books/:id', verifyToken, async (req, res) => {
+  try {
+    const book = await Book.findByIdAndDelete(req.params.id);
+    if (!book) {
+      return res.status(404).json({ message: 'Book not found' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
 });
 
 app.post('/login', (req, res) => {
@@ -73,6 +114,23 @@ app.post('/login', (req, res) => {
   const token = jwt.sign({ id: user._id }, config.secret, { expiresIn: config.expiresIn });
   res.send({ token });
 });
+
+
+async function getBook(req, res, next) {
+  let book
+  try {
+    book = await Book.findById(req.params.id)
+    if (book == null) {
+      return res.status(404).json({message: 'cannot find dubscriber'})
+    }
+  }
+  catch (err){
+    return res.status(500).json({message: err.message})
+  }
+
+  res.book = book;
+  next();
+}
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`Listening on port ${port}...`));
