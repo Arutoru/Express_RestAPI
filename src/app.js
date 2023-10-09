@@ -77,8 +77,8 @@ app.get('/books/:id', verifyToken, async (req, res) => {
 // Create a new book
 app.post('/books', verifyToken, async (req, res) => {
   try {
-    const book = await Book(req.body);
-    book.save();
+    const book = Book(req.body);
+    await book.save();
     res.status(201).json(book);
   } catch (error) {
     console.error(error);
